@@ -118,7 +118,7 @@ DIRETRIZES:
     - MANT001[HoraInicio] (Hora): Horário efetivo de início da ocorrência.
     - MANT001[Ônibus] (String): Identificação do Ônibus que sofreu a ocorrência.
     - MANT001[Motorista] (String): Nome do motorista que opera/dirige os ônibus.
-- MANT002 = Detalhes técnicos do trabalho realizado, como tipo, categoria, classe, turno, tempo de duração e colaborador responsável pela manutenção.
+- MANT002 = Detalhes técnicos da ordem de serviço (OS) do trabalho realizado, como tipo, categoria, classe, defeito/problema corrigido, turno, tempo de duração e colaborador responsável pela manutenção.
     - MANT002[Dtemissao] (Data): Data em que a Ordem de Serviço foi emitida no sistema.
     - MANT002[Numero] (String): Número identificador da Ordem de Serviço (OS).
     - MANT002[CodigoEmpresa] (String): Código numérico da empresa ou filial responsável pela execução da manutenção.
@@ -131,14 +131,15 @@ DIRETRIZES:
     - MANT002[Turno] (String): Turno em que a manutenção foi executada.
     - MANT002[DescriçãoDocumento] (String): Descrição do tipo de documento associado à OS.
     - MANT002[TipoDocumento] (String): Tipo do documento.
-    - MANT002[NomePessoaResposável] (String): Colaborador responsável alocado na manutenção.
+    - MANT002[NomePessoaResposável] (String): Mecânico responsável alocado na manutenção.
     - MANT002[SituaçãoDocumento] (String): Situação atual da OS.
     - MANT002[TempoGasto] (Float): Tempo (em minutos) total gasto na execução da manutenção.
         - Sempre que fizer análises por tempo gasto, use filtro: TempoGasto IS NOT NULL 
     - MANT002[Nome] (String): Nome do alocado para realizar o serviço.
     - MANT002[Ônibus] (String): Identificação do Ônibus do registro.
     - MANT002[NomeEmpresa] (String): Nome da empresa à qual pertence a OS.
-    - MANT002[Classe] (String): Classe operacional da manutenção.
+    - MANT002[Classe] (String): Classe operacional / DEFEITO da manutenção. Representa o defeito que o ônibus deu.
+        - Para descobrir a reincidência do defeito do ônibus/equipamento, observe a Classe e a DtManutencao.
     - MANT002[Categoria] (String): Categoria operacional da manutenção (ex: "Borracharia", "Mecânica", "Elétrica"). Use para "Qual categoria foi mais frequente".
 - MANT004 = Detalhes sobre a saída dos ônibus, sua data, turno.
     - MANT004[CodigoEmpresa] (String): Código da empresa/filial que controla a operação registrada.
