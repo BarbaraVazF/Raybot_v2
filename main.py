@@ -99,7 +99,7 @@ DIRETRIZES:
     - CTM[NomePessoaResposável] (String): Usuário do sistema que gerou o registro.
 - MANT001 = Detalhes sobre a abertura de chamado e sobre o serviço realizado na manutenção.
     - MANT001[Dtemissao] (Data): Data de registro da manutenção do sistema.
-    - MANT001[DetalhesServiço] (String): Informações relacionadas ao motivo ou ao local da manutenção/troca. Quando iniciar com “na Garagem”, significa que a manutenção ocorreu na garagem; Quando iniciar com “no Terminal”, significa que a manutenção ocorreu no terminal; Quando iniciar com “no Trajeto”, significa que a manutenção ocorreu no trajeto do ônibus; Quando iniciar com “Quebra”, significa que o motivo da manutenção foi uma quebra.
+    - MANT001[DetalhesServiço] (String): Informações relacionadas ao motivo ou ao local da manutenção/troca. Quando iniciar com “na Garagem”, significa que a manutenção/troca ocorreu na garagem; Quando iniciar com “no Terminal”, significa que a manutenção/troca ocorreu no terminal; Quando iniciar com “no Trajeto”, significa que a manutenção/troca ocorreu no trajeto do ônibus; Quando iniciar com “Quebra”, significa que o motivo da manutenção/troca foi uma quebra.
     - MANT001[OIDDocumento] (String):Identificador interno único da ocorrência.
     - MANT001[CodigoEmpresa] (String): Código da empresa proprietária do ônibus.
     - MANT001[DtSituacao] (Data): Data em que a situação do documento mudou (ex.: aberto → liquidado).
@@ -134,6 +134,7 @@ DIRETRIZES:
     - MANT002[NomePessoaResposável] (String): Colaborador responsável alocado na manutenção.
     - MANT002[SituaçãoDocumento] (String): Situação atual da OS.
     - MANT002[TempoGasto] (Float): Tempo (em minutos) total gasto na execução da manutenção.
+        - Sempre que fizer análises por tempo gasto, use filtro: TempoGasto IS NOT NULL 
     - MANT002[Nome] (String): Nome do alocado para realizar o serviço.
     - MANT002[Ônibus] (String): Identificação do Ônibus do registro.
     - MANT002[NomeEmpresa] (String): Nome da empresa à qual pertence a OS.
@@ -170,6 +171,10 @@ DIRETRIZES:
     - IND003[AnoFabricação] (String): Ano de fabricação do Ônibus.
     - IND003[Meses Rodando] (String): Quantidade de meses que o Ônibus está em operação desde sua fabricação.
     - IND003[NomeEmpresa] (String): Nome da empresa.
+3. **Buscas de Texto (Case Insensitive):** O banco de dados faz distinção entre maiúsculas e minúsculas, e entre singular e plural. Portanto, ao gerar queries SQL para filtrar textos (como Centro de Custo, Descrição, NomeEmpresa, Categoria, etc.), SEMPRE ignore a capitalização e o plural.
+- Use a função `LOWER()` em ambos os lados da comparação. E em casos de palavras no plural, no banco ou na pergunta, transforme em singular.
+- Alternativa CORRETA: `WHERE campo LIKE 'valor'`
+- NUNCA use igualdade simples (`=`) direta para strings fornecidas pelo usuário sem tratar a capitalização.
 
 IMPORTANTE: Sempre verifique `sql_db_schema` antes de criar queries SQL para não inventar colunas.
 Responda sempre em Português do Brasil.
