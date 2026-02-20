@@ -1,6 +1,6 @@
 import os
 import sys
-import concurrent.futures
+import asyncio
 from dotenv import load_dotenv
 load_dotenv()
 from langchain_openai import ChatOpenAI
@@ -60,7 +60,8 @@ custom_tools = [
     kpi_tools.calcular_ioalo,
     kpi_tools.calcular_indoa,
     kpi_tools.analisar_evolucao_kpi,
-    kpi_tools.consultar_meta_indicador
+    kpi_tools.consultar_meta_indicador,
+    kpi_tools.calcular_kpi_por_mes
 ]
 
 all_tools = custom_tools + sql_tools
@@ -71,7 +72,7 @@ hoje = datetime.datetime.now().strftime("%d/%m/%Y")
 agent_executor = create_react_agent(llm, tools=all_tools)
 
 # 5. Execução
-def main():
+async def main():
     print("🤖 Raybot Iniciado. Digite 'sair' para encerrar.")
     
     # Defina o tempo máximo de espera (em segundos). Ajuste conforme necessário.
@@ -93,24 +94,22 @@ def main():
             inputs = {"messages": messages}
             
             # Executa a chamada ao agente dentro de um executor de thread
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(agent_executor.invoke, inputs)
+            try:
+                # O wait_for corta a execução de verdade se passar do tempo
+                result = await asyncio.wait_for(
+                    agent_executor.ainvoke(inputs), 
+                    timeout=TEMPO_MAXIMO_SEGUNDOS
+                )
                 
-                try:
-                    # Tenta capturar o resultado dentro do limite de tempo
-                    result = future.result(timeout=TEMPO_MAXIMO_SEGUNDOS)
-                    
-                    # Pega a última mensagem
-                    resposta_final = result["messages"][-1].content
-                    print(f"\n📢 Raybot: {resposta_final}")
-                    
-                except concurrent.futures.TimeoutError:
-                    # O que o bot dirá se demorar demais
-                    print(f"\n📢 Raybot: Puxa, essa consulta está demorando mais do que o esperado ({TEMPO_MAXIMO_SEGUNDOS} segundos). Você poderia tentar simplificar a pergunta ou reduzir o período analisado?")
+                resposta_final = result["messages"][-1].content
+                print(f"\n📢 Raybot: {resposta_final}")
+                
+            except asyncio.TimeoutError:
+                print(f"\n📢 Raybot: Puxa, essa consulta está demorando mais do que o esperado ({TEMPO_MAXIMO_SEGUNDOS} segundos). Você poderia tentar simplificar a pergunta ou reduzir o período analisado?")
             
         except Exception as e:
             # O ideal é logar o erro 'e' em um arquivo, mas para o usuário mantemos amigável
             print(f"\n📢 Raybot: Infelizmente, não foi possível responder à pergunta neste momento.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

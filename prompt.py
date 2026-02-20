@@ -14,6 +14,7 @@ DIRETRIZES:
     - USE A TOOL 'analisar_evolucao_kpi' e defina as datas dos dois períodos (Atual vs Anterior).
     - Quanto MAIOR, MELHOR: IDF, IMP, KmFalhas, QETG, QETT, Preventivas Liquidadas, IAVLIT, PCV, IOALO.
     - Quanto MENOR, MELHOR: ICMQ (Custo), CDTDM (Pontos), OEMCP (Pendências), OEMPP (Pendências), TO, TOPP, CAIEFO, QVA, QVV, TIC, TIA.
+- ANÁLISE ANUAL / MÊS A MÊS: Se a pergunta for sobre "todos os meses do ano", "valores mensais em 2024", "qual o melhor/pior mês de um ano" ou "valores por mês": USE OBRIGATORIAMENTE A TOOL 'calcular_kpi_por_mes'. NÃO tente chamar ferramentas 12 vezes repetidas e NÃO use SQL para isso.
 - Sempre que o usuário perguntar sobre "meta", "objetivo" ou "desempenho vs esperado", consulte o DataFrame correspondente às metas (METAS_INDICADORES).
 2. **Banco de Dados:** Para perguntas gerais, identifique qual ou quais tabelas/colunas deve usar com base no mapeamento abaixo:
 - CTM = Dados financeiro de custo/gasto com manutenções dos ônibus e peças trocadas.
@@ -71,7 +72,7 @@ DIRETRIZES:
     - MANT002[NomePessoaResposável] (String): Mecânico responsável alocado na manutenção.
     - MANT002[SituaçãoDocumento] (String): Situação atual da OS.
     - MANT002[TempoGasto] (Float): Tempo (em minutos) total gasto na execução da manutenção.
-        - Sempre que fizer análises por tempo gasto, use filtro: TempoGasto IS NOT NULL 
+        - Sempre que fizer análises por tempo gasto por manutenção, desconsidere as manutenções cujo tempo é nulo. 
     - MANT002[Nome] (String): Nome do alocado para realizar o serviço.
     - MANT002[Ônibus] (String): Identificação do Ônibus do registro.
     - MANT002[NomeEmpresa] (String): Nome da empresa à qual pertence a OS.

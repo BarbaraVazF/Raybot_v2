@@ -35,47 +35,52 @@ def set_db_engine(engine):
     global GLOBAL_ENGINE
     GLOBAL_ENGINE = engine
 
+_DF_CACHE = {}
+
 def get_df_by_name(partial_name):
     """
-    Busca a tabela no Banco de Dados SQLite que contenha o 'partial_name'
-    e retorna como DataFrame pandas para manter compatibilidade com a lógica existente.
+    Busca a tabela com cache para evitar múltiplos SELECT * na mesma sessão.
     """
-    global GLOBAL_ENGINE
+    global GLOBAL_ENGINE, _DF_CACHE
     if GLOBAL_ENGINE is None:
         print(f"{Fore.RED}[ERRO] Engine de Banco de Dados não configurada em tools.py{Style.RESET_ALL}")
         return None
 
+    partial_name_lower = partial_name.lower()
+
+    # 1. Verifica se já está no cache
+    for cached_name, cached_df in _DF_CACHE.items():
+        if partial_name_lower in cached_name.lower():
+            return cached_df.copy() # Retorna uma cópia para segurança
+
     try:
-        # 1. Listar tabelas para encontrar o nome correto
+        # 2. Listar tabelas se não estiver no cache
         with GLOBAL_ENGINE.connect() as conn:
-            # Consulta para listar tabelas no SQLite
             query_tables = text("SELECT name FROM sqlite_master WHERE type='table';")
             result = conn.execute(query_tables)
             tabelas_existentes = [row[0] for row in result]
 
-        # 2. Encontrar a tabela que corresponde ao partial_name (ex: "CTM" em "base_leblon_CTM")
         nome_tabela_real = None
         for tabela in tabelas_existentes:
-            if partial_name.lower() in tabela.lower():
+            if partial_name_lower in tabela.lower():
                 nome_tabela_real = tabela
                 break
         
         if not nome_tabela_real:
-            print(f"{Fore.YELLOW}[WARN] Tabela contendo '{partial_name}' não encontrada no DB.{Style.RESET_ALL}")
             return None
 
-        # 3. Carregar tabela para DataFrame
+        # 3. Faz o SELECT e Salva no Cache
         with GLOBAL_ENGINE.connect() as conn:
             query = text(f'SELECT * FROM "{nome_tabela_real}"')
             df = pd.read_sql_query(query, conn)
         
-        # Adiciona a coluna __origem para compatibilidade com lógica antiga, se necessário
         df["__origem"] = nome_tabela_real
-        
-        # Padronização de colunas (igual ao script original)
         df.columns = df.columns.str.lower()
         
-        return df
+        # Armazena no cache global
+        _DF_CACHE[nome_tabela_real] = df
+        
+        return df.copy()
 
     except Exception as e:
         print(f"{Fore.RED}[ERRO] Falha ao ler tabela '{partial_name}' do DB: {e}{Style.RESET_ALL}")
@@ -976,3 +981,73 @@ def consultar_meta_indicador(indicador: str, empresa: str, data_referencia: str)
         return f"A meta de {indicador} para {empresa} em {dt_busca.strftime('%m/%Y')} é {valor_meta}."
     except Exception as e:
         return f"Erro ao consultar meta: {e}"
+
+import calendar
+
+class InputCalculoKPIMensal(BaseModel):
+    indicador: str = Field(..., description="Nome exato do indicador (ex: 'ICMQ', 'IDF')")
+    ano: int = Field(..., description="Ano para análise (ex: 2024)")
+    filtro_coluna: Optional[str] = Field(default=None, description="Coluna de filtro (ex: 'onibus')")
+    filtro_valor: Optional[str] = Field(default=None, description="Valor do filtro (ex: '1234')")
+
+@tool(args_schema=InputCalculoKPIMensal)
+def calcular_kpi_por_mes(indicador: str, ano: int, filtro_coluna: Optional[str] = None, filtro_valor: Optional[str] = None) -> str:
+    """
+    Calcula o valor de um indicador para TODOS os meses de um ano específico.
+    Use esta tool SEMPRE que o usuário perguntar sobre a evolução mensal de um indicador em um ano, 
+    ou para descobrir qual foi o melhor/pior mês do ano para aquele indicador.
+    """
+    nome_kpi = indicador.upper().strip()
+    config = None
+    for k, v in CONFIG_KPI.items():
+        if k in nome_kpi or nome_kpi in k:
+            config = v
+            nome_kpi = k
+            break
+            
+    if not config:
+        return f"Erro: Indicador '{indicador}' não configurado nas tools."
+        
+    tool_objeto = config["func"]
+    funcao_python_real = tool_objeto.func # Pega a função original ignorando o wrapper do Langchain
+    direcao_melhor = config["melhor"]
+    
+    print(f"\n{Fore.MAGENTA}📅 CALCULANDO [{nome_kpi}] MÊS A MÊS PARA {ano}{Style.RESET_ALL}")
+
+    resultados = []
+    for mes in range(1, 13):
+        ultimo_dia = calendar.monthrange(ano, mes)[1]
+        dt_ini = f"{ano}-{mes:02d}-01"
+        dt_fim = f"{ano}-{mes:02d}-{ultimo_dia:02d}"
+        
+        try:
+            # Reutiliza a lógica original da tool já existente
+            res_txt = funcao_python_real(filtro_coluna=filtro_coluna, filtro_valor=filtro_valor, data_inicial=dt_ini, data_final=dt_fim)
+            val = extrair_valor_numerico(res_txt)
+            if val is not None:
+                resultados.append((mes, val, res_txt))
+        except Exception as e:
+            continue
+            
+    if not resultados:
+        return f"Não foram encontrados dados ou não foi possível calcular {nome_kpi} para os meses de {ano}."
+        
+    meses_pt = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 
+                7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
+    
+    texto_res = f"📊 Análise de {nome_kpi} por mês em {ano}:\n"
+    for mes, val, txt in resultados:
+        texto_res += f"• {meses_pt[mes]}: {val:,.2f}\n"
+        
+    # Lógica para achar melhor/pior baseado no MIN/MAX configurado
+    if direcao_melhor == "MAX":
+        melhor_mes = max(resultados, key=lambda x: x[1])
+        pior_mes = min(resultados, key=lambda x: x[1])
+    else:
+        melhor_mes = min(resultados, key=lambda x: x[1])
+        pior_mes = max(resultados, key=lambda x: x[1])
+        
+    texto_res += f"\n🏆 Melhor mês: {meses_pt[melhor_mes[0]]} ({melhor_mes[1]:,.2f})\n"
+    texto_res += f"🚨 Pior mês: {meses_pt[pior_mes[0]]} ({pior_mes[1]:,.2f})\n"
+    
+    return texto_res
