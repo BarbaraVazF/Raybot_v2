@@ -9,8 +9,9 @@ from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langgraph.prebuilt import create_react_agent
 from sqlalchemy import create_engine
 from langchain_core.messages import SystemMessage, HumanMessage
-import tools as kpi_tools
 import datetime
+from langgraph.checkpoint.memory import MemorySaver
+import tools as kpi_tools
 from prompt import SYSTEM_PROMPT_TEXT
 
 # 1. Configuração do Banco de Dados
@@ -74,7 +75,7 @@ def main():
     print("🤖 Raybot Iniciado. Digite 'sair' para encerrar.")
     
     # Defina o tempo máximo de espera (em segundos). Ajuste conforme necessário.
-    TEMPO_MAXIMO_SEGUNDOS = 30 
+    TEMPO_MAXIMO_SEGUNDOS = 45
 
     while True:
         user_input = input("\nPergunte: ")

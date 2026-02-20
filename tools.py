@@ -65,7 +65,9 @@ def get_df_by_name(partial_name):
             return None
 
         # 3. Carregar tabela para DataFrame
-        df = pd.read_sql_table(nome_tabela_real, GLOBAL_ENGINE)
+        with GLOBAL_ENGINE.connect() as conn:
+            query = text(f'SELECT * FROM "{nome_tabela_real}"')
+            df = pd.read_sql_query(query, conn)
         
         # Adiciona a coluna __origem para compatibilidade com lógica antiga, se necessário
         df["__origem"] = nome_tabela_real
@@ -137,14 +139,12 @@ def aplicar_filtro_periodo(df, nome_tabela_referencia, data_ini, data_fim):
         df_temp = df.copy()
         series_raw = df_temp[col_data_nome].astype(str).str.strip()
         
-        try:
-            df_temp[col_data_nome] = pd.to_datetime(series_raw, dayfirst=True, format='mixed', errors='coerce')
-        except:
-            df_temp[col_data_nome] = pd.to_datetime(series_raw, dayfirst=True, errors='coerce')
-            mask_erro = df_temp[col_data_nome].isna()
-            if mask_erro.sum() > 0:
-                recuperado = pd.to_datetime(series_raw[mask_erro], format='%Y-%m-%d', errors='coerce')
-                df_temp.loc[mask_erro, col_data_nome] = recuperado
+        df_temp[col_data_nome] = pd.to_datetime(series_raw, format='mixed', errors='coerce')
+        
+        mask_erro = df_temp[col_data_nome].isna()
+        if mask_erro.sum() > 0:
+            recuperado = pd.to_datetime(series_raw[mask_erro], dayfirst=True, format='mixed', errors='coerce')
+            df_temp.loc[mask_erro, col_data_nome] = recuperado
 
         df_temp = df_temp.dropna(subset=[col_data_nome])
         mask = pd.Series(True, index=df_temp.index)
@@ -189,8 +189,8 @@ def encontrar_coluna_flexivel(df, termo_busca):
 class InputCalculoKPI(BaseModel):
     filtro_coluna: Optional[str] = Field(default=None, description="Nome da coluna para filtro categórico (ex: 'onibus', 'empresa')")
     filtro_valor: Optional[str] = Field(default=None, description="Valor do filtro categórico (ex: 'b 1151', 'Leblon')")
-    data_inicial: Optional[str] = Field(default=None, description="Data inicial no formato AAAA-MM-DD")
-    data_final: Optional[str] = Field(default=None, description="Data final no formato AAAA-MM-DD")
+    data_inicial: Optional[str] = Field(default=None, description="Data inicial (AAAA-MM-DD). Para meses inteiros, use sempre o dia 01.")
+    data_final: Optional[str] = Field(default=None, description="Data final (AAAA-MM-DD). Para meses inteiros, use o ÚLTIMO dia do mês (28, 30 ou 31).")
 
 # ====================================================
 # TOOLS EXISTENTES (Mantidas originais, apenas importadas)
@@ -819,30 +819,39 @@ CONFIG_KPI = {
 }
 
 def extrair_valor_numerico(texto: str) -> Optional[float]:
-    """Remove R$, %, texto e retorna o float. Ex: 'O ICMQ é R$ 5,50' -> 5.50"""
-    # 1. Tenta achar padrão monetário ou decimal brasileiro
-    # Procura dígitos, opcionalmente pontos de milhar, virgula decimal, dígitos
-    try:
-        # Regex captura: (números com ponto/virgula) logo após "é " ou "R$ " ou ":"
-        # Simplificação: Pega o primeiro número float válido na string
-        padrao = r"([\d\.]+,\d+|[\d,]+\.\d+|\d+)"
-        matches = re.findall(padrao, texto)
+    """Remove R$, %, texto e retorna o float corrigindo a conversão de milhar."""
+    # Pega o primeiro grupo de números que contenha dígitos, pontos ou vírgulas
+    padrao = r"([\d]+(?:[.,]\d+)*)"
+    matches = re.findall(padrao, texto)
+    
+    if not matches: 
+        return None
+    
+    valor_str = matches[0]
+    
+    # Descobre se o formato é US ou BR pela posição do último separador
+    if ',' in valor_str and '.' in valor_str:
+        pos_virgula = valor_str.rfind(',')
+        pos_ponto = valor_str.rfind('.')
         
-        if not matches: return None
-        
-        # Pega o primeiro match que parece ser o valor principal
-        valor_str = matches[0]
-        
-        # Limpa pontuação para float python (Troca , por . se for decimal BR)
-        # Se tiver ',' e '.' (ex: 1.000,50), remove ponto e troca virgula
-        if ',' in valor_str and '.' in valor_str:
+        if pos_virgula > pos_ponto:
+            # Formato BR: 1.234.567,89 -> tira o ponto, troca vírgula por ponto
             valor_str = valor_str.replace('.', '').replace(',', '.')
-        elif ',' in valor_str:
+        else:
+            # Formato US: 1,234,567.89 -> apenas tira a vírgula do milhar
+            valor_str = valor_str.replace(',', '')
+            
+    elif ',' in valor_str:
+        # Se tem apenas vírgula (ex: "12,50" BR ou "12,000" US)
+        partes = valor_str.split(',')
+        # Se tiver 3 dígitos exatos depois da vírgula, assume que é milhar (formato US das tools)
+        if len(partes[-1]) == 3 and len(partes) > 1:
+            valor_str = valor_str.replace(',', '')
+        else:
+            # Caso contrário, trata como decimal inserido manualmente
             valor_str = valor_str.replace(',', '.')
             
-        return float(valor_str)
-    except:
-        return None
+    return float(valor_str)
 
 class InputAnaliseEvolucao(BaseModel):
     indicador: str = Field(..., description="Nome exato do indicador (ex: 'ICMQ', 'IDF', 'KmFalhas')")
